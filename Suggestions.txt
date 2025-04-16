@@ -1,0 +1,96 @@
+Below is a suggested modular breakdown with recommendations on what each file should contain. Organizing your project in this way helps keep the concerns separate and facilitates testing each component independently.
+
+──────────────────────────────
+
+main.py
+Role:
+• Acts as the entry point to your project.
+• Coordinates the overall simulation, initiates race detection, and prints or logs the results.
+
+What to include:
+• Parse command-line arguments (or use a configuration file) to toggle between different detectors (Naive, SP, SP_hybrid).
+• Import modules from OrderMaintenance, NaiveRaceDetector, SP, SP_hybrid (if available), and Simulator.
+• Set up a simulation run by generating a simulation tree via Simulator.
+• Call the appropriate race detection function(s) and output the results.
+• Optionally, include basic timing or logging for performance comparison.
+
+────────────────────────────── 2. OrderMaintenance.py
+Role:
+• Provides the core data structure and operations for maintaining a linear order (used for English and Hebrew orders).
+
+What to include:
+• A class (e.g., OrderMaintenance) with methods such as:
+
+OM_INSERT(new_item, after_item=None): Inserts a new item after a given element (or at the beginning).
+
+OM_PRECEDES(item1, item2): Checks whether item1 comes before item2 in the maintained order.
+
+Helper functions (e.g., for rebalancing or displaying the current ordering).
+
+• Consider adding options for fractional labeling if you plan to support arbitrary insertions without a complete rebalance strategy.
+• Unit tests or simple examples within an if __name__ == '__main__': block can be useful for quick verification.
+
+────────────────────────────── 3. NaiveRaceDetector.py
+Role:
+• Implements a simple sequential race detection mechanism for baseline comparison.
+• Processes memory accesses one by one in a sequential execution trace.
+
+What to include:
+• A class (e.g., NaiveRaceDetector) that:
+
+Provides methods to log memory accesses (tracking thread ID, variable name, access type, and a timestamp).
+
+Implements a method (detect_races()) that performs pairwise comparisons of accesses to flag data races.
+• This file can also include example usages and print-outs of detected races.
+
+────────────────────────────── 4. SP.py
+Role:
+• Contains the implementation of the “vanilla” SP-order based race detector.
+• Uses two instances of your OrderMaintenance module (one for English, one for Hebrew) to determine the SP relationship.
+
+What to include:
+• A class or functions that:
+
+Build or simulate the SP parse tree (if not fully delegated to the Simulator) in a sequential (left-to-right) manner.
+
+On-the-fly update the English and Hebrew orders by calling the OM_INSERT operations from OrderMaintenance.
+
+Implement a method (e.g., SP_PRECEDES(u, v)) that checks if one thread precedes another in both orders (and thus determines a race condition if not). • Include pseudocode from the paper as comments to remind yourself of the relationship between S-nodes and P-nodes, and how insertion order differs in each ordering.
+
+────────────────────────────── 5. SP_hybrid.py (Optional)
+Role:
+• Implements a parallel version of the SP-order approach (SP-hybrid), which adapts the deterministic SP-order ideas to a parallel execution (typically by combining global ordering with local traces).
+
+What to include:
+• A class or set of functions that:
+
+Divide execution into “traces” managed on individual processors (or threads) using local data structures (e.g., inspired by SP-bags).
+
+Manage a global SP-order structure to order these traces with minimal synchronization. • Use Python’s threading (or multiprocessing) modules to simulate parallel execution.
+• Be mindful of synchronization details (e.g., locks around global data structure updates) and include comments about possible race conditions.
+• Since this is optional and more complex, consider building it after you’ve got the vanilla SP detector working well.
+
+────────────────────────────── 6. Simulator.py
+Role:
+• Generates simulation trees that mimic the SP parse trees observed in fork–join multithreaded programs.
+• Provides a controlled environment to test and compare the race detectors.
+
+What to include:
+• Functions or a class (e.g., Simulator) that:
+
+Constructs an SP parse tree. The nodes should include leaves (threads) and internal nodes labeled as S-node or P-node.
+
+Optionally randomizes the structure to simulate different types of parallelism.
+
+Exposes methods for traversing the tree such that you can plug the simulation into the SP or Naive race detector. • Example simulation routines:
+
+A simple tree with one fork–join (for a minimal test)
+
+A more complex tree for performance or behavior testing.
+
+────────────────────────────── Final Thoughts
+• Each file should ideally be focused on one component.
+• Ensure that your modules interact via clearly defined interfaces (e.g., the Simulator should output trees in a structure expected by SP.py and SP_hybrid.py).
+• Writing unit tests (even if minimal) in each file will help you verify that components work as expected before integrating them in main.py.
+
+This project structure is modular and expandable. You start with a basic sequential simulation and race detection (NaiveRaceDetector and SP) and can later extend to parallel implementations (via SP_hybrid) as your confidence grows and as you need more performance comparisons.
