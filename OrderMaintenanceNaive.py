@@ -1,7 +1,8 @@
-class OMNodeNaive:
+class OMNaiveNode:
     """
-    A lightweight wrapper for a value so we can refer to nodes
-    (instead of bare values) when inserting/querying.
+    A node in the naive order‑maintenance list.
+    Each node has:
+      - val:     the user‑stored value
     """
     __slots__ = ('val',)
     def __init__(self, val):
@@ -27,7 +28,7 @@ class OrderMaintenanceNaive:
         Returns the new OMNodeNaive.
         Time: O(n) for list.insert or .index
         """
-        new_node = OMNodeNaive(val)
+        new_node = OMNaiveNode(val)
         if node is None:
             # at front
             self._elems.insert(0, new_node)
