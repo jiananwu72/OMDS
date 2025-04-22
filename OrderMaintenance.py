@@ -27,7 +27,7 @@ class OrderMaintenance:
       of a small block restores gaps between labels.
     """
 
-    def __init__(self, initial_gap=1 << 20, block_size=50):
+    def __init__(self, initial_gap=1 << 20, bucket_size=100):
         """
         initial_gap: starting gap between adjacent labels
         block_size:  max number of nodes to relabel in one rebalance
@@ -35,7 +35,7 @@ class OrderMaintenance:
         self.head = None
         self.tail = None
         self.gap = initial_gap
-        self.block_size = block_size
+        self.bucket_size = bucket_size
 
     def insert_after(self, node, val):
         """
@@ -90,30 +90,42 @@ class OrderMaintenance:
         next_node.prev = new_node
         return new_node
 
-    def _relabel_block(self, start_node):
+    def _relabel_block(self, node):
         """
-        Relabel up to `block_size` nodes starting at start_node
-        so they have evenly spaced labels again.
-        We gather nodes [start_node, start_node.next, …] up to block_size
-        or until we reach the end of list.
+        Relabel up to `block size` nodes starting at start_node (micro‑bucket).
+        Ensures monotonic labels with new small gaps within the bucket.
         """
-        # Collect nodes to relabel
+        # Collect a small bucket of nodes
         nodes = []
-        curr = start_node
-        for _ in range(self.block_size):
+        curr = node
+        for _ in range(self.bucket_size):
             if curr is None:
                 break
             nodes.append(curr)
             curr = curr.next
 
+        # Need at least two nodes to rebalance
         if len(nodes) < 2:
-            return  # nothing to do
+            return
 
-        # Reset labels: start at nodes[0].label, then add gap each time
-        label = nodes[0].label
-        for node in nodes[1:]:
-            label += self.gap
+        after = curr  # first node after bucket, could be None
+        L = nodes[0].label
+        if after and after.label > L:
+            R = after.label
+        else:
+            # No room after bucket: create artificial macro gap
+            R = L + self.bucket_size * self.gap * 2
+
+        k = len(nodes)
+        delta = (R - L) // (k + 1)
+        if delta <= 0:
+            delta = 1
+
+        # Assign new micro‑labels evenly spaced in (L, R)
+        label = L + delta
+        for node in nodes:
             node.label = label
+            label += delta
 
     def delete(self, node):
         """
@@ -153,12 +165,12 @@ class OrderMaintenance:
 
     def __repr__(self):
         vals = [f"{n.val!r}@{n.label}" for n in self]
-        return "OrderMaintenance(" + " → ".join(vals) + ")"
+        return "OM[" + " → ".join(vals) + "]"
 
 
 if __name__ == "__main__":
     # --- Demo ---
-    om = OrderMaintenance(initial_gap=100, block_size=5)
+    om = OrderMaintenance(initial_gap=100)
 
     # Build a simple list
     n0 = om.insert_after(None, "A")
@@ -171,13 +183,13 @@ if __name__ == "__main__":
     print("After inserting B.5:", om)
 
     # Force relabeling by inserting many in the same gap
-    for i in range(5):
+    for i in range(6):
         om.insert_after(n1, f"X{i}")
     print("After crowding B's gap:", om)
 
     # Order queries
-    print("Is A before C?", om.comes_before(n0, n2))
-    print("Is C before B.5?", om.comes_before(n2, n1_5))
+    print("A before C?", om.comes_before(n0, n2))
+    print("C before B.5?", om.comes_before(n2, n1_5))
 
     # Deletion
     om.delete(n1_5)

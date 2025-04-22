@@ -37,7 +37,7 @@ class OrderMaintenanceNaive:
             self._elems.insert(idx + 1, new_node)  # O(n)
         return new_node
 
-    def delete(self, node):
+    def delete(self, node): # Might not be used in practice, but included for completeness
         """
         Remove `node` from the sequence.
         Time: O(n) for list.remove
@@ -69,13 +69,13 @@ if __name__ == "__main__":
     nC = om.insert_after(nB, "C")
     print("Initial:", om)
 
-    # insert X between A and B
-    nX = om.insert_after(nA, "X")
-    print("After inserting X:", om)
+    # insert B.5 between A and B
+    nX = om.insert_after(nA, "B.5")
+    print("After inserting B.5:", om)
 
     # order queries
-    print("A before X?", om.comes_before(nA, nX))
-    print("C before X?", om.comes_before(nC, nX))
+    print("A before B.5?", om.comes_before(nA, nX))
+    print("C before B.5?", om.comes_before(nC, nX))
 
     # delete B
     om.delete(nB)
