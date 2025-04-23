@@ -62,8 +62,7 @@ class SPSimulator:
     def _series(self, comp1, comp2):
         """
         Series-compose two SP components by identifying comp1.t with comp2.s.
-        comp1, comp2: tuples (G, s, t, nodes_set).
-        Returns new tuple (G, s1, t2, new_nodes_set).
+        Ensures no node has more than 2 children.
         """
         G1, s1, t1, nodes1 = comp1
         G2, s2, t2, nodes2 = comp2
@@ -83,7 +82,9 @@ class SPSimulator:
         for u, v in G2.edges():
             u_m = mapping.get(u, u)
             v_m = mapping.get(v, v)
-            G.add_edge(u_m, v_m)
+            # Ensure no node has more than 2 children
+            if G.out_degree(u_m) < 2:
+                G.add_edge(u_m, v_m)
 
         # merged node‐set
         mapped_nodes2 = {mapping.get(n, n) for n in nodes2}
@@ -94,7 +95,7 @@ class SPSimulator:
         """
         Parallel-compose two SP components by forking comp2 onto a new thread,
         then joining both into new source & sink events.
-        Returns new tuple (G, new_source, new_sink, new_nodes_set).
+        Ensures no node has more than 2 children.
         """
         G1, s1, t1, nodes1 = comp1
         G2, s2, t2, nodes2 = comp2
@@ -117,7 +118,8 @@ class SPSimulator:
             if mapped not in G:
                 G.add_node(mapped, **G1.nodes[n])
         for u, v in G1.edges():
-            G.add_edge(map1.get(u, u), map1.get(v, v))
+            if G.out_degree(map1.get(u, u)) < 2:
+                G.add_edge(map1.get(u, u), map1.get(v, v))
 
         # --- copy comp2: map s2→new_s, t2→new_t, reassign thread=new_thread
         map2 = {s2: new_s, t2: new_t}
@@ -129,7 +131,8 @@ class SPSimulator:
                 attrs['thread'] = new_thread
                 G.add_node(mapped, **attrs)
         for u, v in G2.edges():
-            G.add_edge(map2.get(u, u), map2.get(v, v))
+            if G.out_degree(map2.get(u, u)) < 2:
+                G.add_edge(map2.get(u, u), map2.get(v, v))
 
         # build merged node‐set
         new_nodes = {

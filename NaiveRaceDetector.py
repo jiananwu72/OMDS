@@ -1,55 +1,82 @@
-from collections import defaultdict
+import networkx as nx
 
-class NaiveRaceDetector:
-    def __init__(self):
-        # Dictionary to store the trace of accesses per variable.
-        # Format: { variable: [(thread_id, access_type, event_index), ...] }
-        self.access_log = defaultdict(list)
-        self.event_counter = 0  # Global timestamp for ordering accesses.
+def compile_to_hb(parseG):
+    """
+    parseG: your parse‐tree DiGraph, where each node has:
+      - d['children'] = [left, right] or None
+      - d['op'], d['var'] on leaves
+    Returns: a new DiGraph Hb with real happens-before edges.
+    """
+    Hb = nx.DiGraph()
+    thread_counter = 0
+    # map parse-node → (thread_id, first_event, last_event)
+    info = {}
 
-    def log_access(self, thread_id, variable, access_type):
-        """
-        Log a memory access.
-        access_type should be either 'read' or 'write'.
-        """
-        self.event_counter += 1
-        self.access_log[variable].append((thread_id, access_type, self.event_counter))
+    def dfs(u, thread_id):
+        nonlocal thread_counter
+        data = parseG.nodes[u]
+        children = data.get('children')
+        if not children:
+            # leaf event
+            Hb.add_node(u, op=data['op'], var=data['var'], thread=thread_id)
+            # link from previous on that thread?
+            prev = getattr(dfs, f"last_{thread_id}", None)
+            if prev:
+                Hb.add_edge(prev, u)
+            setattr(dfs, f"last_{thread_id}", u)
+            return u, u, thread_id
 
-    def detect_races(self):
-        """
-        Naively scan through the access log for potential races.
-        A race is reported if two accesses to the same variable come from different
-        threads, at least one of the accesses is a write, and they are not ordered
-        by any synchronization (this simplified example does not handle synchronization).
-        """
-        races = []
-        for var, accesses in self.access_log.items():
-            n = len(accesses)
-            for i in range(n):
-                for j in range(i + 1, n):
-                    tid1, type1, t1 = accesses[i]
-                    tid2, type2, t2 = accesses[j]
-                    if tid1 != tid2:
-                        # If either access is a write, flag a potential race.
-                        if type1 == 'write' or type2 == 'write':
-                            races.append((var, accesses[i], accesses[j]))
-        return races
+        # internal node: series or parallel?
+        left, right = children
+        kind = data.get('kind', 'P')  # you could store 'S'/'P' in parseG.nodes[u]['kind']
+        if kind == 'S':
+            # series: same thread
+            first, last, _ = dfs(left, thread_id)
+            return dfs(right, thread_id)  # links automatically in seq order
+        else:
+            # parallel: fork new thread for right subtree
+            fork = f"fork_{u}"
+            join = f"join_{u}"
+            Hb.add_node(fork, op=None, var=None, thread=thread_id)
+            prev = getattr(dfs, f"last_{thread_id}", None)
+            if prev:
+                Hb.add_edge(prev, fork)
+            # left branch on same thread
+            L_first, L_last, _ = dfs(left, thread_id)
+            # right branch gets new id
+            thread_counter += 1
+            new_t = thread_counter
+            R_first, R_last, _ = dfs(right, new_t)
+            # emit join
+            Hb.add_node(join, op=None, var=None, thread=thread_id)
+            Hb.add_edge(L_last, join)
+            Hb.add_edge(R_last, join)
+            setattr(dfs, f"last_{thread_id}", join)
+            return fork, join, thread_id
 
-# Example usage:
+    # assume top‐node is “P1”
+    dfs("P1", 0)
+    return Hb
+
+def naive_race_detector(Hb):
+    races = []
+    nodes = list(Hb.nodes(data=True))
+    for i, (u, du) in enumerate(nodes):
+        for v, dv in nodes[i+1:]:
+            if du.get('var') == dv.get('var') \
+               and ('W' in (du.get('op'), dv.get('op'))) \
+               and not nx.has_path(Hb, u, v) \
+               and not nx.has_path(Hb, v, u):
+                races.append((u, v))
+    return races
+
 if __name__ == "__main__":
-    detector = NaiveRaceDetector()
-    
-    # Simulate some memory accesses on a shared variable "x".
-    detector.log_access("Thread-A", "x", "read")
-    detector.log_access("Thread-B", "x", "write")
-    detector.log_access("Thread-A", "x", "write")
-    detector.log_access("Thread-B", "x", "read")
-    
-    potential_races = detector.detect_races()
-    if potential_races:
-        print("Potential Data Races Detected:")
-        for race in potential_races:
-            var, access1, access2 = race
-            print(f"Variable {var}: {access1} <--> {access2}")
-    else:
-        print("No races detected.")
+    from SimpleSimulator import make_race_dag, make_no_race_dag, print_dag
+
+    parse = make_race_dag()
+    Hb    = compile_to_hb(parse)
+    print("Races:", naive_race_detector(Hb))
+
+    parse = make_no_race_dag()
+    Hb    = compile_to_hb(parse)
+    print("Races:", naive_race_detector(Hb))
