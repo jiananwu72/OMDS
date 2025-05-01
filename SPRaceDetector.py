@@ -1,6 +1,8 @@
 import networkx as nx
 from SimpleSimulator import make_race_dag, make_no_race_dag
+from Simulator import make_random_sp_dag
 from OrderMaintenance import OrderMaintenance
+import itertools
 
 class SPRaceDetector:
     def __init__(self, G, om_class):
@@ -54,10 +56,25 @@ class SPRaceDetector:
         # still pass the raw IDs here
         return (self.eng.comes_before(self.eng_map[X], self.eng_map[Y]) and
                 self.heb.comes_before(self.heb_map[X], self.heb_map[Y]))
+    
+def sp_race_detection(detector, G):
+    # Collect event nodes (those with op 'R' or 'W')
+    events = [n for n, d in G.nodes(data=True) if d.get('op') in ('R', 'W')]
+    races = []
+    for u, v in itertools.combinations(events, 2):
+        du = G.nodes[u]
+        dv = G.nodes[v]
+        # same variable and at least one write
+        if du['var'] == dv['var'] and ('W' in (du['op'], dv['op'])):
+            # unordered in happens-before per SP detector
+            if not detector.sp_precedes(u, v) and not detector.sp_precedes(v, u):
+                races.append((u, v))
+    return races
 
 
 if __name__ == "__main__":
     race_dag    = make_race_dag()
     no_race_dag = make_no_race_dag()
+    dag = make_random_sp_dag(50, p_series=0.6, p_read=0.7, var_pool=['x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'x8'])
 
-    detector = SPRaceDetector(race_dag, OrderMaintenance)
+    detector = SPRaceDetector(dag, OrderMaintenance)

@@ -1,95 +1,95 @@
 import random
 import networkx as nx
 
-class Node:
-    def __init__(self, kind, children=None, leaf_id=None):
-        """
-        kind: 'S' (series), 'P' (parallel), or 'leaf'
-        children: list of child Nodes (only for 'S'/'P')
-        leaf_id: integer id (only for 'leaf')
-        """
-        self.kind = kind
-        self.children = children or []
-        self.leaf_id = leaf_id
-        self.parent = None
-        for c in self.children:
-            c.parent = self
-
-    def __repr__(self):
-        if self.kind == 'leaf':
-            return f"Leaf({self.leaf_id})"
-        return f"{self.kind}-node"
-
-def generate_random_sp(N, p_series=0.5):
+def make_random_sp_dag(N,
+                       p_series: float = 0.5,
+                       p_read: float = 0.5,
+                       var_pool=None):
     """
-    Build a random SP parse tree with exactly N leaves.
+    Generate a random series‐parallel DAG with N leaves.
     
     Each step picks one existing leaf at random, replaces it
-    with an S- or P-node, and gives that node two brand-new leaves.
+    with an S- or P-node, and gives that node two new leaves.
     
     Args:
-      N         : total number of leaves desired (must be ≥1)
+      N         : total number of leaves desired (>=1)
       p_series  : probability of choosing an S-node (vs P-node)
-    
+      p_read    : probability that a new leaf is a read (“R”)
+      var_pool  : list of variable names, e.g. ['x','y','z']
     Returns:
-      root node of the generated tree
+      G : networkx.DiGraph with exactly N leaves
     """
+    if var_pool is None:
+        var_pool = ['x','y','z']
     if N < 1:
         raise ValueError("N must be at least 1")
     
-    # start with a single leaf
-    leaf_counter = 1
-    root = Node('leaf', leaf_id=leaf_counter)
-    leaf_counter += 1
+    G = nx.DiGraph()
+    parent = {} 
     
-    leaves = [root]
+    leaf_ctr = 1
+    int_ctr  = 1
     
-    # each expansion increases leaf count by +1; do exactly N-1 expansions
-    for _ in range(N - 1):
+    u = f"u{leaf_ctr}"
+    leaf_ctr += 1
+    op = 'R' if random.random() < p_read else 'W'
+    var = random.choice(var_pool)
+    G.add_node(u, op=op, var=var, children=None)
+    parent[u] = None
+    leaves = [u]
+    
+    for _ in range(N-1):
         leaf = random.choice(leaves)
-        
-        # decide series vs parallel
-        kind = 'S' if random.random() < p_series else 'P'
-        
-        # create two new leaves
-        left  = Node('leaf', leaf_id=leaf_counter)
-        leaf_counter += 1
-        right = Node('leaf', leaf_id=leaf_counter)
-        leaf_counter += 1
-        
-        # new internal node
-        internal = Node(kind, children=[left, right])
-        
-        # splice internal into the tree in place of `leaf`
-        if leaf.parent is None:
-            root = internal
-        else:
-            parent = leaf.parent
-            # replace leaf in its parent's children
-            for idx, c in enumerate(parent.children):
-                if c is leaf:
-                    parent.children[idx] = internal
-                    internal.parent = parent
-                    break
-        
-        # update our leaf list
         leaves.remove(leaf)
+        old_par = parent[leaf]
+        
+        kind = 'S' if random.random() < p_series else 'P'
+        blk = f"{kind}{int_ctr}"
+        int_ctr += 1
+        
+        left = f"u{leaf_ctr}"
+        leaf_ctr += 1
+        opL = 'R' if random.random() < p_read else 'W'
+        varL = random.choice(var_pool)
+        
+        right = f"u{leaf_ctr}"
+        leaf_ctr += 1
+        opR = 'R' if random.random() < p_read else 'W'
+        varR = random.choice(var_pool)
+        
+        G.add_node(blk, op=None, var=None, children=[left, right])
+        parent[blk] = old_par
+        
+        G.add_node(left,  op=opL, var=varL, children=None)
+        G.add_node(right, op=opR, var=varR, children=None)
+        parent[left]  = blk
+        parent[right] = blk
         leaves.extend([left, right])
+        
+        G.add_edge(blk, left)
+        G.add_edge(blk, right)
+        
+        if old_par is None:
+            pass
+        else:
+            ch = G.nodes[old_par]['children']
+            ch[ch.index(leaf)] = blk
+            G.nodes[old_par]['children'] = ch
+            
+            G.remove_edge(old_par, leaf)
+            G.add_edge(old_par, blk)
+        
+        G.remove_node(leaf)
     
-    return root
+    return G
 
-def print_sp_tree(node, indent=0):
-    """Recursively print the tree structure."""
-    prefix = " " * indent
-    if node.kind == 'leaf':
-        print(f"{prefix}Leaf(thread={node.leaf_id})")
-    else:
-        print(f"{prefix}{node.kind}-node")
-        for child in node.children:
-            print_sp_tree(child, indent + 2)
-
-# ──────────────── Demo ────────────────
 if __name__ == "__main__":
-    random.seed(41)
-    T = generate_random_sp(N=8, p_series=0.6)
-    print_sp_tree(T)
+    # random.seed(0)
+    G = make_random_sp_dag(5, p_series=0.6, p_read=0.7, var_pool=['x','y'])
+    
+    # print nodes in the same style as your example:
+    for n, d in G.nodes(data=True):
+        print(f'G.add_node("{n}", op={d["op"]!r}, var={d["var"]!r}, children={d["children"]})')
+    print()
+    for u, v in G.edges():
+        print(f'G.add_edge("{u}", "{v}")')

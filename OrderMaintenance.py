@@ -135,16 +135,13 @@ class OrderMaintenance:
         if node.prev:
             node.prev.next = node.next
         else:
-            # removing head
             self.head = node.next
 
         if node.next:
             node.next.prev = node.prev
         else:
-            # removing tail
             self.tail = node.prev
 
-        # Help GC
         node.prev = node.next = None
 
     def comes_before(self, a, b):
