@@ -30,7 +30,7 @@ def test_performance(G):
 
             elapsed = time.time() - start
             print(f"{om_name}-{method_name:5s}: "
-                  f"found {len(races):4d} races in {elapsed:.6f}s")
+                  f"found races in {elapsed:.6f}s")
 
 def print_dag(G):
     print("Nodes:")
@@ -41,5 +41,5 @@ def print_dag(G):
         print(f"  {u} -> {v}")
 
 if __name__ == '__main__':
-    G = make_random_sp_dag(1500, p_series=0.3, p_read=0.7, var_pool=['a','b','c','d','e','f','g','h'])
+    G = make_random_sp_dag(1500, p_series=0.3, p_read=0.3, var_pool=['a','b','c','d','e','f','g','h'])
     test_performance(G)
